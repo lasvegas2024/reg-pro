@@ -15,9 +15,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @RestController
@@ -35,6 +37,8 @@ public class DishController {
     @Autowired
     DishFlavorService dishFlavorService = null;
 
+    @Autowired
+    RedisTemplate redisTemplate;
 
 
 //    @GetMapping("/page")
@@ -147,7 +151,11 @@ public class DishController {
     @RequestMapping(method = RequestMethod.PUT)
     public R<String> update(@RequestBody DishDTO dishDTO){
 
+        String key = "dish_"+dishDTO.getCategoryId()+"_"+dishDTO.getStatus();
+        redisTemplate.delete(key);
+
         dishService.updateWithFlover(dishDTO);
+
         return R.success("修改成功");
     }
 
@@ -163,6 +171,14 @@ public class DishController {
 
     @RequestMapping(value = "/list",method = RequestMethod.GET)
     R<List<DishDTO>> list(Dish dish){
+
+        String key = "dish_"+dish.getCategoryId()+"_"+dish.getStatus();
+
+        List<DishDTO> o = (List<DishDTO>)redisTemplate.opsForValue().get(key);
+
+        if(o!=null){
+            return R.success(o);
+        }
         LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper();
         queryWrapper.eq(dish.getCategoryId()!=null,Dish::getCategoryId,dish.getCategoryId());
         queryWrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
@@ -184,6 +200,8 @@ public class DishController {
             dishDTO.setFlavors(list1);
             return dishDTO;
         }).collect(Collectors.toList());
+
+        redisTemplate.opsForValue().set(key,dishDTOList,2, TimeUnit.HOURS);
 
         return R.success(dishDTOList);
     }
