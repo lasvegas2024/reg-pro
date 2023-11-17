@@ -9,6 +9,7 @@ import com.trus.regpro.Utils.ValidateCodeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,7 +30,8 @@ public class UserController {
     @Autowired
     UserService userService;
 
-
+    @Autowired
+    RedisTemplate redisTemplate;
     /**
      * 发送验证码
      *
@@ -51,7 +54,8 @@ public class UserController {
             String code = ValidateCodeUtils.generateValidateCode(4).toString();
             log.info(code);
 //            SMSUtils.sendMessage("外卖","",code,phone);
-            session.setAttribute(phone,code);
+//            session.setAttribute(phone,code);
+            redisTemplate.opsForValue().set(phone,code,5, TimeUnit.MINUTES);
             return R.success("短信发送成功");
         }
         return R.error("错误");
@@ -65,8 +69,9 @@ public class UserController {
         String code = map.get("code").toString();
 
 
-        String codeInSession = (String) session.getAttribute(phone);
+//        String codeInSession = (String) session.getAttribute(phone);
 
+        String codeInRedis = (String)redisTemplate.opsForValue().get(phone);
         //修改
 //        log.info("比对{},{}",codeInSession,code);
 //        if(codeInSession !=null && !code.equals(codeInSession)){
@@ -84,6 +89,7 @@ public class UserController {
                 userService.save(user);
             }
             session.setAttribute("user",user.getId());
+            redisTemplate.delete(phone);
             return R.success(user);
 
         }
